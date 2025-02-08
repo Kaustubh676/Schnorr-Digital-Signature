@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schnorr Signature Demo</title>
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif; /* Using a more modern font */
+            margin: 0; 
+            display: flex; /* Centering content vertically and horizontally */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Making the body take up full viewport height */
+            background: linear-gradient(to bottom right, #f6d365, #fda085); /* Vibrant gradient */
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 500px; /* Limiting width for better responsiveness */
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 2rem;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        input, button, textarea {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+            box-sizing: border-box; /* Includes padding in width calculation */
+        }
+
+        textarea {
+            height: 120px;
+            resize: vertical; /* Allow vertical resizing */
+        }
+
+        button {
+            background-color: #ff5722; /* Vibrant orange */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease; 
+        }
+
+        button:hover {
+            background-color: #e64c1a; 
+        }
+
+        .error {
+            color: #d9534f; /* Red error color */
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Schnorr Digital Signature </h1>
+
+        <div class="section">
+            <h2>1. Key Generation</h2>
+            <label for="p">Prime (p):</label>
+            <input type="number" id="p" value="23">
+            <label for="q">Order (q):</label>
+            <input type="number" id="q" value="11">
+            <label for="g">Generator (g):</label>
+            <input type="number" id="g" value="2">
+            <button onclick="generateKeys()">Generate Keys</button>
+            <textarea id="keyOutput" readonly></textarea>
+        </div>
+
+        <div class="section">
+            <h2>2. Sign Messages</h2>
+            <label for="message1">Message 1:</label>
+            <input type="text" id="message1" value="Message 1">
+            <label for="message2">Message 2:</label>
+            <input type="text" id="message2" value="Message 2">
+            <button onclick="signMessages()">Sign Messages</button>
+            <textarea id="signatureOutput" readonly></textarea>
+        </div>
+
+        <div class="section">
+            <h2>3. Recover Private Key</h2>
+            <button onclick="recoverKey()">Recover Private Key</button>
+            <textarea id="recoveredKeyOutput" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        let keys = {};
+        let signature1, signature2, reusedK;
+
+        function generateKeys() {
+            const p = parseInt(document.getElementById("p").value);
+            const q = parseInt(document.getElementById("q").value);
+            const g = parseInt(document.getElementById("g").value);
+
+            if (p <= 0 || q <= 0 || g <= 0) {
+                alert("Please enter valid positive values for p, q, and g!");
+                return;
+            }
+            // Validate p and q
+            if ((p - 1) % q !== 0 || q >= p) {
+                alert("Invalid inputs: 'q' must be a factor of p-1 and less than p.");
+                return;
+            }
+
+            keys.private = Math.floor(Math.random() * (q - 1)) + 1; // Private key
+            keys.public = Math.pow(g, keys.private) % p; // Public key
+            keys.p = p;
+            keys.q = q;
+            keys.g = g;
+
+            document.getElementById("keyOutput").value =
+                `Prime p: ${p}\nPrime q: ${q}\nGenerator g: ${g}\nPrivate Key: ${keys.private}\nPublic Key: ${keys.public}`;
+        }
+
+        function signMessages() {
+            if (!keys.private) {
+                alert("Please generate keys first!");
+                return;
+            }
+
+            const p = keys.p;
+            const q = keys.q;
+            const g = keys.g;
+            const privateKey = keys.private;
+
+            const message1 = document.getElementById("message1").value.trim();
+            const message2 = document.getElementById("message2").value.trim();
+
+            if (!message1 || !message2) {
+                alert("Please enter valid messages to sign!");
+                return;
+            }
+
+            reusedK = Math.floor(Math.random() * (q - 1)) + 1; // Reused nonce
+
+            function sign(message, k) {
+                const r = Math.pow(g, k) % p;
+                const e = hashMessage(message + r) % q;
+                const s = (k + privateKey * e) % q;
+                return { r, s, e, k };
+            }
+
+            signature1 = sign(message1, reusedK);
+            signature2 = sign(message2, reusedK);
+
+            document.getElementById("signatureOutput").value =
+                `Signature 1: r=${signature1.r}, s=${signature1.s}, e=${signature1.e}\n` +
+                `Signature 2: r=${signature2.r}, s=${signature2.s}, e=${signature2.e}`;
+        }
+
+        function recoverKey() {
+            if (!signature1 || !signature2) {
+                alert("Please sign messages first!");
+                return;
+            }
+
+            const q = keys.q;
+            const r1 = signature1.r, s1 = signature1.s, e1 = signature1.e;
+            const r2 = signature2.r, s2 = signature2.s, e2 = signature2.e;
+
+            if (r1 !== r2) {
+                alert("Nonces are not reused; attack not applicable.");
+                return;
+            }
+
+            const numerator = (s1 - s2 + q) % q; // Ensure non-negative result
+            const denominator = (e1 - e2 + q) % q; // Ensure non-negative result
+            const privateKey = (numerator * modInverse(denominator, q)) % q;
+
+            document.getElementById("recoveredKeyOutput").value =
+                `Recovered Private Key: ${privateKey}\n` +
+                (privateKey === keys.private ? "Attack Successful!" : "Attack Failed.");
+        }
+
+        function hashMessage(message) {
+            return Array.from(message).reduce((hash, char) => hash + char.charCodeAt(0) * 31, 0);
+        }
+
+        function modInverse(a, m) {
+            let m0 = m, t, q;
+            let x0 = 0, x1 = 1;
+
+            if (m === 1) return 0;
+
+            while (a > 1) {
+                q = Math.floor(a / m);
+                t = m;
+                m = a % m;
+                a = t;
+                t = x0;
+                x0 = x1 - q * x0;
+                x1 = t;
+            }
+
+            return x1 < 0 ? x1 + m0 : x1;
+        }
+    </script>
+</body>
+</html>
